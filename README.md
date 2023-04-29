@@ -23,7 +23,11 @@ pip install pynput
 pip install pymongo
 pip install pycryptodome
 ```
+Or
 
+```bash
+pip install -r requirements.txt
+```
 After you need to connect you mongodb database
 
 ```python
