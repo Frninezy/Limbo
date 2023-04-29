@@ -1,0 +1,7 @@
+pip install wmi
+pip install psutil
+pip install requests
+pip install pypiwin32
+pip install pynput
+pip install pymongo
+pip install pycryptodome
