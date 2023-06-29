@@ -1,5 +1,8 @@
 # Limbo
 
+![Alt Text](limbo.jpg)
+
+
 Limbo is a powerful malware tool that can be used to collect various types of information from a user's computer. Specifically, it is capable of:
 
 - Collecting saved passwords from Google Chrome
