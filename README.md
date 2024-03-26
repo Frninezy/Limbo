@@ -12,6 +12,9 @@ Limbo is a powerful malware tool that can be used to collect various types of in
 
 It's important to note that Limbo is intended for educational purposes only. As the creator, I take no responsibility for any illegal activities that may be carried out using this tool. I have made the code public for viewing purposes only, and urge you to use it ethically and responsibly
 
+# About this fork
+In this fork, instead of connecting to database. it writes data directly to folder with separated txt files. Also this version doesnt have any keylogger functions. use for educational purposes only.
+
 # Installation
 
 To use Limbo, you will need to install several Python libraries. You can install these libraries using pip, running the following command:
@@ -27,7 +30,6 @@ After cloning the repository and installing the required libraries, you can use 
 ```Bash
 python limbo.py
 ```
-
 # Disclaimer
 
 Limbo is intended for educational purposes only. The creator assumes no responsibility for any illegal activities carried out with it, and the code is made public for viewing purposes only. Please use this tool ethically and responsibly.
